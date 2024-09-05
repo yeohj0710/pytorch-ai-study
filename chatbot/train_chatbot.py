@@ -60,14 +60,19 @@ class SimpleRNN(nn.Module):
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
-        h0 = torch.zeros(1, x.size(0), self.hidden_size)
+        h0 = torch.zeros(1, x.size(0), self.hidden_size).to(x.device)
         out, _ = self.rnn(x, h0)
         out = self.fc(out)
         return out
 
 
 def train_model(
-    file_path, model_path, num_epochs=10, hidden_size=50, learning_rate=0.001
+    file_path,
+    model_path,
+    model_new_path,
+    num_epochs=10,
+    hidden_size=50,
+    learning_rate=0.001,
 ):
     sequences, vocab = load_data(file_path)
 
@@ -84,8 +89,11 @@ def train_model(
     input_size = len(vocab) + 1
     output_size = len(vocab) + 1
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"학습에 사용할 연산 장치: {device}")
+
     if os.path.exists(model_path):
-        checkpoint = torch.load(model_path)
+        checkpoint = torch.load(model_path, map_location=device)
         model = SimpleRNN(input_size, checkpoint["hidden_size"], output_size)
         model.load_state_dict(checkpoint["model_state_dict"])
         max_len = checkpoint["max_len"]
@@ -94,6 +102,8 @@ def train_model(
         model = SimpleRNN(input_size, hidden_size, output_size)
         print("기존 모델이 발견되지 않아 새 모델을 생성 후 학습시킵니다.")
 
+    model = model.to(device)
+
     criterion = nn.CrossEntropyLoss(ignore_index=0)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -101,6 +111,7 @@ def train_model(
         steps, step = len(dataloader), 0
         for inputs, targets in dataloader:
             inputs = nn.functional.one_hot(inputs, num_classes=input_size).float()
+            inputs, targets = inputs.to(device), targets.to(device)
             targets = targets.view(-1)
 
             outputs = model(inputs).view(-1, output_size)
@@ -111,7 +122,7 @@ def train_model(
             optimizer.step()
 
             step += 1
-            if step % 100 == 0:
+            if step % 1000 == 0:
                 print(f"Epoch: {epoch + 1}/{num_epochs}, Step: {step}/{steps}")
 
         print(f"Epoch: {epoch + 1}/{num_epochs}, Loss: {loss.item():.4f}")
@@ -125,9 +136,9 @@ def train_model(
             "input_size": input_size,
             "output_size": output_size,
         },
-        model_path,
+        model_new_path,
     )
-    print(f"모델이 {model_path}에 저장되었습니다.")
+    print(f"모델이 {model_new_path}에 저장되었습니다.")
 
 
 if __name__ == "__main__":
@@ -135,9 +146,12 @@ if __name__ == "__main__":
 
     file_path = os.path.join(current_dir, "chat_data.txt")
     model_path = os.path.join(current_dir, "chatbot.pth")
+    model_new_path = os.path.join(current_dir, "chatbot.pth")
 
-    num_epochs = 10
-    hidden_size = 500
+    num_epochs = 1
+    hidden_size = 100
     learning_rate = 0.001
 
-    train_model(file_path, model_path, num_epochs, hidden_size, learning_rate)
+    train_model(
+        file_path, model_path, model_new_path, num_epochs, hidden_size, learning_rate
+    )

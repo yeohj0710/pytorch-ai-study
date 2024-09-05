@@ -45,6 +45,10 @@ def filter_chat_lines(filename):
         if not is_korean(line):
             continue
 
+        # 7. 사진이나 동영상, 이모티콘은 제외
+        if line in ["사진", "동영상", "이모티콘"]:
+            continue
+
         filtered_lines.append(line)
 
     with open(file_path, "w", encoding="utf-8") as output_file:

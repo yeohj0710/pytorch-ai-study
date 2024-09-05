@@ -39,10 +39,9 @@ def load_model(model_path):
     return model, vocab, max_len
 
 
-def predict_argmax(
+def predict_and_display_probabilities(
     model, vocab, input_text, max_len, max_output_words=5, temperature=1.0
 ):
-    """가장 높은 확률의 단어를 선택"""
     words = input_text.split()
     indices = [vocab.get(word, 0) for word in words]
     input_seq = pad_sequences([indices], max_len)
@@ -54,50 +53,25 @@ def predict_argmax(
     output = model(input_tensor)
     output_probs = nn.functional.softmax(output / temperature, dim=2)
 
-    output_seq = torch.argmax(output_probs[0], dim=1).tolist()
-
-    inv_vocab = {v: k for k, v in vocab.items()}
-    response_words = [inv_vocab.get(idx, "<UNK>") for idx in output_seq if idx != 0]
-    response = " ".join(response_words[:max_output_words])
-
-    return response
-
-
-def predict_random(
-    model, vocab, input_text, max_len, max_output_words=5, temperature=1.0
-):
-    """확률을 반영하여 단어를 선택하되, 무작위성을 부여"""
-    words = input_text.split()
-    indices = [vocab.get(word, 0) for word in words]
-    input_seq = pad_sequences([indices], max_len)
-    input_tensor = torch.tensor(input_seq, dtype=torch.long)
-    input_tensor = nn.functional.one_hot(
-        input_tensor, num_classes=len(vocab) + 1
-    ).float()
-
-    output = model(input_tensor)
-    output_probs = nn.functional.softmax(output / temperature, dim=2)
     output_seq = torch.multinomial(output_probs[0], 1).squeeze().tolist()
 
     inv_vocab = {v: k for k, v in vocab.items()}
+
     response_words = [inv_vocab.get(idx, "<UNK>") for idx in output_seq if idx != 0]
+    response = " ".join(response_words[:max_output_words])
 
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    end_char_file_path = os.path.join(current_dir, "end_char.txt")
+    print(f"ChatGSA: {response}\n")
 
-    with open(end_char_file_path, "r", encoding="utf-8") as f:
-        end_chars = [line.strip() for line in f if line.strip()]
-
-    response = ""
-    for word in response_words:
-        response += word + " "
-        if any(word.endswith(end_char) for end_char in end_chars):
-            break
-
-    response_words = response.strip().split()[:max_output_words]
-    response = " ".join(response_words)
-
-    return response
+    for i, word_idx in enumerate(output_seq[:max_output_words]):
+        if word_idx == 0:
+            continue
+        word = inv_vocab.get(word_idx, "<UNK>")
+        sorted_probs, indices = torch.sort(output_probs[0][i], descending=True)
+        print(f"출력된 단어 '{word}' 뒤에 올 단어들의 확률:")
+        for j, idx in enumerate(indices[:5]):
+            print(
+                f"  {inv_vocab.get(idx.item(), '<UNK>')}: {sorted_probs[j].item():.4f}"
+            )
 
 
 if __name__ == "__main__":
@@ -110,6 +84,5 @@ if __name__ == "__main__":
         user_input = input("You: ")
         if user_input.lower() == "종료":
             break
-        response = predict_random(model, vocab, user_input, max_len)
-        # response = predict_argmax(model, vocab, user_input, max_len)
-        print(f"ChatGSA: {response}")
+
+        predict_and_display_probabilities(model, vocab, user_input, max_len)
