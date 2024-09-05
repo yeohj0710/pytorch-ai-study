@@ -1,6 +1,4 @@
-chat_data_temp.txt
-chat_data.json
-chat_data.txt
-chats.txt
 *.pth
+*.txt
+
 /etc
