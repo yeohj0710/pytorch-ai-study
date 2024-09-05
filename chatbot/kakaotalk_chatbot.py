@@ -105,6 +105,9 @@ def main():
         if current_text == prev_text:
             continue
 
+        if "깡통:" in current_text:
+            continue
+
         if "깡통" not in current_text:
             continue
 
